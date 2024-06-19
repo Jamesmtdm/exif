@@ -6,3 +6,6 @@ apt-get install -y exiftool
 
 # Run the Python script
 python main.py
+
+chmod +x start.sh
+
