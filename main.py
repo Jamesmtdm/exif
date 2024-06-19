@@ -6,11 +6,15 @@ import string
 from telebot import types
 from PIL import Image
 import numpy as np
+import logging
 
-API_TOKEN = os.getenv('API_TOKEN')
-GROUP_ID = int(os.getenv('GROUP_ID'))
+API_TOKEN = os.getenv('7268846453:AAHiWVQNI0P9BDI8itjKV-rFCT1Hin_UU1o')
+GROUP_ID = int(os.getenv('1002020462782'))
 INVITE_LINK = 'https://t.me/+BsyQHjdkn9IyYTlk'
 bot = telebot.TeleBot(API_TOKEN)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
 mode = None
 
@@ -20,12 +24,15 @@ def random_string(length=10):
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     if message.chat.type != 'private':
+        logging.info('Received /start command in non-private chat, ignoring.')
         return
 
     user_id = message.from_user.id
+    logging.info(f'Received /start command from user {user_id}.')
 
     try:
         member = bot.get_chat_member(chat_id=GROUP_ID, user_id=user_id)
+        logging.info(f'User {user_id} status in group: {member.status}.')
         if member.status in ['member', 'administrator', 'creator']:
             markup = types.InlineKeyboardMarkup()
             change_button = types.InlineKeyboardButton(text="Change Metadata", callback_data="change_metadata")
@@ -36,24 +43,29 @@ def send_welcome(message):
         else:
             bot.send_message(message.chat.id, f'You must be a member of the group to use this bot. Please join here: {INVITE_LINK}')
     except Exception as e:
+        logging.error(f'Error verifying membership for user {user_id}: {e}')
         bot.send_message(message.chat.id, f'Error: Unable to verify membership. Please join the group here: {INVITE_LINK}')
 
 @bot.callback_query_handler(func=lambda call: call.data in ["change_metadata", "remove_metadata", "spoof_media"])
 def callback_query(call):
     global mode
     if call.message.chat.type != 'private':
+        logging.info('Received callback query in non-private chat, ignoring.')
         return
 
     bot.answer_callback_query(call.id, f"Selected option: {call.data.replace('_', ' ').title()}")
     mode = call.data
+    logging.info(f'Mode set to {mode} by user {call.from_user.id}.')
     bot.send_message(call.message.chat.id, "Send me an image or video to process.")
 
 @bot.message_handler(content_types=['photo', 'video', 'document'])
 def handle_media(message):
     if message.chat.type != 'private':
+        logging.info('Received media in non-private chat, ignoring.')
         return
 
     user_id = message.from_user.id
+    logging.info(f'Received media from user {user_id}.')
 
     try:
         member = bot.get_chat_member(chat_id=GROUP_ID, user_id=user_id)
@@ -61,6 +73,7 @@ def handle_media(message):
             bot.send_message(message.chat.id, f'You must be a member of the group to use this bot. Please join here: {INVITE_LINK}')
             return
     except Exception as e:
+        logging.error(f'Error verifying membership for user {user_id}: {e}')
         bot.send_message(message.chat.id, f'Error: Unable to verify membership. Please join the group here: {INVITE_LINK}')
         return
 
@@ -89,9 +102,11 @@ def handle_media(message):
         with open(local_file_path, 'wb') as new_file:
             new_file.write(downloaded_file)
 
+        exiftool_path = 'exiftool'
+
         if mode == 'change_metadata' or mode == 'spoof_media':
             exiftool_command = [
-                'exiftool',
+                exiftool_path,
                 f'-Artist={random_string()}',
                 f'-Author={random_string()}',
                 f'-Description={random_string()}',
@@ -110,7 +125,7 @@ def handle_media(message):
 
         if mode == 'remove_metadata':
             if message.content_type == 'photo' or message.document.mime_type.startswith('image/'):
-                exiftool_command = ['exiftool', '-all=', '-overwrite_original', local_file_path]
+                exiftool_command = [exiftool_path, '-all=', '-overwrite_original', local_file_path]
             else:
                 exiftool_command = ['ffmpeg', '-i', local_file_path, '-map_metadata', '-1', '-c:v', 'copy', '-c:a', 'copy', local_file_path]
             subprocess.run(exiftool_command)
@@ -128,6 +143,7 @@ def handle_media(message):
 
         os.remove(local_file_path)
     except Exception as e:
+        logging.error(f'Error processing media for user {user_id}: {e}')
         bot.send_message(message.chat.id, "An error occurred: " + str(e))
 
 def spoof_image(file_path):
@@ -136,25 +152,25 @@ def spoof_image(file_path):
         for _ in range(10):
             x, y = random.randint(0, pixels.shape[1] - 1), random.randint(0, pixels.shape[0] - 1)
             pixels[y, x] = [random.randint(0, 255) for _ in range(3)]
-        img = Image.fromarray(pixels)
-        img.save(file_path)
-        exiftool_command = [
-            'exiftool',
-            f'-Artist={random_string()}',
-            f'-Author={random_string()}',
-            f'-Description={random_string()}',
-            f'-Title={random_string()}',
-            f'-Creator={random_string()}',
-            f'-Subject={random_string()}',
-            f'-Comment={random_string()}',
-            f'-Copyright=© {random.randint(2000, 2025)} {random_string()}',
-            f'-Software={random_string()}',
-            f'-Make={random_string()}',
-            f'-Model={random_string()}',
-            '-overwrite_original',
-            file_path
-        ]
-        subprocess.run(exiftool_command)
+    img = Image.fromarray(pixels)
+    img.save(file_path)
+    exiftool_command = [
+        'exiftool',
+        f'-Artist={random_string()}',
+        f'-Author={random_string()}',
+        f'-Description={random_string()}',
+        f'-Title={random_string()}',
+        f'-Creator={random_string()}',
+        f'-Subject={random_string()}',
+        f'-Comment={random_string()}',
+        f'-Copyright=© {random.randint(2000, 2025)} {random_string()}',
+        f'-Software={random_string()}',
+        f'-Make={random_string()}',
+        f'-Model={random_string()}',
+        '-overwrite_original',
+        file_path
+    ]
+    subprocess.run(exiftool_command)
 
 def spoof_video(file_path):
     temp_output = "temp_" + os.path.basename(file_path)
