@@ -177,8 +177,4 @@ def spoof_video(file_path):
     subprocess.run(['ffmpeg', '-i', file_path, '-c:v', 'copy', '-c:a', 'copy', temp_output])
     os.rename(temp_output, file_path)
 
-# Clone the required repository
-os.system('git clone https://github.com/Anish-M-code/Metadata-Remover.git')
-os.chdir('Metadata-Remover')
-
 bot.polling()
